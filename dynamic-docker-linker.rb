@@ -62,13 +62,16 @@ class Linker
 		enable_ip_forwarding()
 
 		table = get_iptables()
+
+		#puts "IPTABLES: \n#{table.join("\n")}"
+
 		info = [localPort, destAddr, destPort]
 		run(netns_exec_command insert_rule_command(table, "PREROUTING", info))
 		run(netns_exec_command insert_rule_command(table, "OUTPUT", info))
 
 		unless table.detect {|l| l.include? "POSTROUTING ContainerSource"}
-			containerAddr = getIp
-			run(netns_exec_command "iptables -A #{postrouting containerAddr}")
+			containerAddr = getIP
+			run(netns_exec_command "iptables -t nat -A #{postrouting containerAddr}")
 		end
 	end
 
@@ -85,7 +88,7 @@ class Linker
 	end
 
 	def get_iptables()
-		run(netns_exec_command("iptables -L -n --line-numbers")).split("\n")
+		run(netns_exec_command("iptables -t nat -L -n --line-numbers")).split("\n")
 	end
 
 	def routing_argument(chain, info)
@@ -110,7 +113,7 @@ class Linker
 			prefix = "-A #{chain}"
 		end
 		
-		"iptables #{prefix} #{routing_argument(chain, info)}"
+		"iptables -t nat #{prefix} #{routing_argument(chain, info)}"
 	end
 
 	def getIP
