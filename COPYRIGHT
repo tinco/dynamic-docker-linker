@@ -1,0 +1,9 @@
+This project is a derivative of a project by:
+
+Copyright 2014 Red Hat, Inc. and/or its affiliates.
+
+as found at: https://github.com/openshift/geard/blob/c5b9eadf13429c4400677eaee66422b3fcf6b456/containers/systemd/init/cmd.go
+
+Modifications are:
+
+Copyright 2014 Tinco Andringa
