@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby
 require 'fileutils'
 require 'ipaddr'
 require 'json'
@@ -5,7 +6,7 @@ require 'json'
 ## TODO almost every line can throw an error in this file, they should be handled
 
 def main
-	cid = ARGV[1]
+	cid = ARGV[0]
 	pid = getPID(cid)
 	name = linkNamespace(pid)
 	linker = Linker.new(name)
@@ -16,7 +17,11 @@ def main
 		linker.link(localPort, destination["address"], destination["port"])
 	end
 
-	unlinkNamespace(pid)
+ensure
+	begin
+		unlinkNamespace(pid)
+	rescue
+	end
 end
 
 def getPID(cid)
@@ -26,7 +31,7 @@ def getPID(cid)
 	if driver.empty? || driver =~ /^lxc/
 		raise "Unsupported driver: '#{driver}', look to geard/docker/docker.go to implement GetChildProcess"
 	else
-		dpid
+		dpid.strip
 	end
 end
 
@@ -35,7 +40,7 @@ def linkNamespace(pid)
 	path = "/var/run/netns/#{name}"
 	nsPath = "/proc/#{pid}/ns/net"
 
-	Dir.mkdir("/var/run/netns", 0755)
+	FileUtils.mkdir_p("/var/run/netns", :mode => 0755)
 	FileUtils.symlink(nsPath, path, :force => true)
 
 	name
@@ -85,6 +90,7 @@ class Linker
 
 	def routing_argument(chain, info)
 		localPort, destAddr, destPort = info
+		localAddr = "127.0.0.1"
 		# on the chain, when a request comes in at localAddr, on port localPort, it is jumped to destination destAddr:destPort
 		route = "-d #{localAddr}/32 -p tcp -m tcp --dport #{localPort} -j DNAT --to-destination #{destAddr}:#{destPort}"
 		comment = "-m comment --comment \"#{chain} LINK: #{localPort}->#{destAddr}:#{destPort}\""
@@ -119,30 +125,48 @@ end
 
 ## Helpers
 class ExecError < StandardError
-	attr_reader stdout
-	attr_reader stderr
-	attr_reader status
+	attr_reader :command
+	attr_reader :stdout
+	attr_reader :stderr
+	attr_reader :status
 
-	def initialize(stdout, stderr, status)
+	def initialize(command, stdout, stderr, status)
+		@command = command
 		@stdout = stdout
 		@stderr = stderr
 		@status = status
 	end
 
 	def message
-		msg = @stdout.read
+		msg = @stdout || ""
 		msg << "\n\n" if msg.length > 0
-		msg << "Command failed: #{@stderr.read}\nStatus: #{@status.to_i}"
+		msg << "Command '#{@command}' failed: #{@stderr}\nStatus: #{@status.to_i}"
 	end
 end
 
 def run(command)
-	Open3.popen3(command) do |stdin,stdout,stderr,wait_thr|
-		if wait_thr.value.success?
-			return stdout.read
-		else
-			raise ExecError.new(stdout,stderr, wait_thr.value)
-		end
+	# stdout, stderr pipes
+	rout, wout = IO.pipe
+	rerr, werr = IO.pipe
+
+	pid = Process.spawn(command, :out => wout, :err => werr)
+	_, status = Process.wait2(pid)
+
+	# close write ends so we could read them
+	wout.close
+	werr.close
+
+	stdout = rout.readlines.join("\n")
+	stderr = rerr.readlines.join("\n")
+
+	# dispose the read ends of the pipes
+	rout.close
+	rerr.close
+
+	if status.success?
+		stdout
+	else
+		raise ExecError.new(command,stdout,stderr,status.exitstatus)
 	end
 end
 
