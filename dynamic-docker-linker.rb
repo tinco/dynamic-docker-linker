@@ -1,20 +1,33 @@
 require 'fileutils'
 require 'ipaddr'
+require 'json'
+
+## TODO almost every line can throw an error in this file, they should be handled
 
 def main
 	cid = ARGV[1]
-	#TODO geard for some reason finds the child process of the container for this
-	pid = run("docker inspect --format '{{ .State.Pid }}' #{cid}")
+	pid = getPID(cid)
 	name = linkNamespace(pid)
 	linker = Linker.new(name)
 
-	#TODO read links from stdin and apply them
-	links = []
-	links.each do |link|
-		linker.link(link)
+	links = JSON.load(STDIN.read)
+
+	links.each do |localPort, destination|
+		linker.link(localPort, destination["address"], destination["port"])
 	end
 
 	unlinkNamespace(pid)
+end
+
+def getPID(cid)
+	dpid = run("docker inspect --format '{{ .State.Pid }}' #{cid}")
+	driver = run("docker inspect --format '{{ .ExecDriver }}' #{cid}")
+
+	if driver.empty? || driver =~ /^lxc/
+		raise "Unsupported driver: '#{driver}', look to geard/docker/docker.go to implement GetChildProcess"
+	else
+		dpid
+	end
 end
 
 def linkNamespace(pid)
