@@ -11,7 +11,7 @@ def main
 	name = linkNamespace(pid)
 	linker = Linker.new(name)
 
-	links = JSON.load(STDIN.read)
+	links = JSON.load(STDIN.read)["links"] || {}
 
 	links.each do |localPort, destination|
 		linker.link(localPort, destination["address"], destination["port"])
