@@ -14,9 +14,6 @@ def main
 end
 
 def link(localPort, destAddr, destPort)
-	enable_routing()
-	enable_ip_forwarding()
-
 	table = get_iptables()
 
 	#puts "IPTABLES: \n#{table.join("\n")}"
@@ -29,14 +26,6 @@ def link(localPort, destAddr, destPort)
 		containerAddr = getIP
 		run("iptables -t nat -A #{postrouting containerAddr}")
 	end
-end
-
-def enable_routing()
-	run("sysctl -w net.ipv4.conf.all.route_localnet=1")
-end
-
-def enable_ip_forwarding()
-	run("sysctl -w net.ipv4.ip_forward=1")
 end
 
 def get_iptables()
