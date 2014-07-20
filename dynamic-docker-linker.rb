@@ -6,8 +6,8 @@ require 'json'
 ## TODO almost every line can throw an error in this file, they should be handled
 
 def main
-	links = JSON.load(STDIN.read)["links"] || {}
-
+	json = JSON.load(STDIN.read)
+	links = json["links"] || {}
 	links.each do |localPort, destination|
 		link(localPort, destination["address"], destination["port"])
 	end
